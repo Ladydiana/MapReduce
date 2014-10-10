@@ -1,0 +1,60 @@
+Nume   	: 	Culincu Diana Cristina
+Grupa  	: 	341C2
+Limbaj	: 	Java
+IDE		: 	Netbeans 7.4
+SO		:	Ubuntu 12.04
+
+
+Cerinta:
+	Scrierea unui program paralel in Java care sa realizeze indexarea unui set de documente primit ca input si apoi sa verifice daca un anumit document este plagiat, prin compararea similaritatii semantice a documentului curent vs. o serie de documente indexate.
+
+	In urma procesului de indexare se determina numarul de aparitii al fiecarui cuvant existent intr-un document, obtinandu-se o lista de perechi (cuvant, numar de aparitii). Programul trebuie sa permita calcularea similaritatii semantice (sub forma de procent) intre documentul primit ca parametru si toate documente indexate si sa afiseze documentele cu grad maxim de similaritate.
+
+	Pentru paralelizarea indexarii sa va folosi paradigma Replicated Workers si modelul MapReduce. Fiecare document se va fragmenta in parti de dimensiune fixa ce vor fi procesate in paralel (operatiunea de Map), pentru fiecare parte rezultand cate un vector partial ce contine termenii si numarul de aparitii ale acestora.Pasul urmator il reprezinta combinarea vectorilor (operatiunea de Reduce) in urma caruia se obtine un vector ce caracterizeaza intregul document. Pentru fiecare document se vor calcula frecventele de aparitie ale cuvintelor dintr-un document, care vor reprezenta indexul documentului. 
+
+	Dandu-se un set de ND documente si un document DOC de verificat impotriva plagiatului (prin calcularea gradului de similaitate cu celelalte documente), sa se determine documentele cu gradul de similaritate mai mare decat un prag X.
+
+	Gradul de similariate intre doua documente se va calcula cu ajutorul formulei:
+
+			sim(di, dj) = sum(f(t,di) * f(t,dj)) [%], unde t apartine lui V, in care:
+				di si dj sunt documentele ale caror grad de similaritate se doreste calculat
+				f(t, di) reprezinta frecventa de aparitie a termenului t in documentul di
+				V reprezinta vocabularul de termeni (se poate considera ca reuniunea termenilor din ele doua documente)
+
+	Frecventa de aparitie a unui termen intr-un document se calculeaza cu formula:
+                f(t, d) = (nr_aparitii_cuvant(t, d) / nr_total_cuvinte(d)) * 100 [%], in care:
+					nr_aparitii_cuvant(t, d) este numarul de aparitii ale termenului t in documentul d
+					nr_total_cuvinte(d) este numarul total de cuvinte din documentul d (in cazul problemei de fata se poate considera ca fiind numarul de cuvinte cu cele mai mari frecvente)
+
+	[MAP]:  impartirea fisierelor se va face in fragmente de cate D octeti (cu exceptia ultimului fragment, care poate fi mai scurt)
+	Observatie: Poate aparea problema ca fragmentul prelucrat de un worker sa se termine sau sa inceapa in mijlocul unui cuvant. Se va adopta urmatoarea conventie: daca fragmentul incepe in mijlocul unui cuvant, worker-ul va "sari peste" acel cuvant; daca fragmentul se termina in mijlocul unui cuvant, worker-ul va prelucra si acel cuvant. in acest mod, cuvintele care sunt "la granita" dintre doua fragmente vor fi prelucrate tot timpul de worker-ul ce se ocupa de fragmentul care se afla in fisier inaintea cuvantului respectiv.
+	Astfel un task de tip “map”:
+		primeste ca input: numele fisierului, pozitia de unde incepe sa citeasca din fisier, si pozitia de sfarsit;
+		intoarce ca output: perechi de tip (cheie, valoare), in cazul problemei de fata: (nume_document, vector_partial). Vectorul partial contine setul de cuvinte impreuna cu numarul de aparitii ale acestora.
+
+	[REDUCE]: Se calculeaza similaritatea semantica intre documentul primit ca parametru si toate documentele indexate.
+
+
+Fisiere:
+	Fisierul ce contine datele de intrare are urmatorul format:
+		pe linia I: numele documentului DOC pentru care se doreste determinarea gradului de plagiere
+		pe linia II: dimensiunea D (in octeti) a fragmentelor in care se vor imparti fisierele
+		pe linia III: numarul X reprezentand “pragul de similaritate” (ex.: vreau sa mi se returneze documentele cu gradul de similaritate mai mare de X fata de documentul D)
+		pe linia IV: numarul ND de documente de tip text de indexat si in care se va face cautarea
+		pe urmatoarele ND linii: numele celor ND documente (cate unul pe linie)
+
+
+Clase: 	Main.java
+	Index.java
+	Record.java
+	Sums.java
+	Task.java
+	Worker.java
+	WorkPool.java
+
+Implementare:
+	Am pornit de la scheletul de cod de la laboratorul de Replicated Workers.
+	Am folosit un singur workpool si un singur tip de worker, caruia ii dau ca argument o variabila type de tip integer care specifica tipul de task (1 - map, 2 - reduce).
+	Impartirea cuvintelor: 	trimit fiecarui worker un vector de string-uri pe care sa le proceseze;
+				practic se citeste din fisier si se pune in vector pana cand se ajunge la limita D de biti si apoi se trimite vectorul
+	Dupa aflarea frecventelor si incheierea ciclului de Map-Reduce, facem un ArrayList care contine pentru fiecare document <docname><lista_cuvinte><frecventa_cuvintelor>, in care sunt pastrate numai cuvintele care trebuiesc cautate (numai cuvintele din documentul DOC). In cazul in care un cuvant nu se afla in documentul i, se adauga o inregistrare cu numele cuvantului si frecventa 0.
